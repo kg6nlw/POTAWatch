@@ -30,7 +30,6 @@ def load_seen() -> Set[str]:
 
 
 def save_seen(seen: Set[str]) -> None:
-    # Keep the state file from growing forever.
     trimmed = list(seen)[-1000:]
     with STATE_FILE.open("w", encoding="utf-8") as f:
         json.dump(trimmed, f, indent=2)
@@ -41,7 +40,6 @@ def normalize_list(values: List[str]) -> Set[str]:
 
 
 def parse_spot_time(spot: Dict[str, Any]) -> datetime | None:
-    # POTA spot fields can vary over time. Try the common timestamp-style fields.
     for key in ("spotTime", "time", "date", "created", "createdAt"):
         value = spot.get(key)
         if not value:
@@ -65,17 +63,18 @@ def spot_matches(spot: Dict[str, Any], config: Dict[str, Any]) -> bool:
     mode = str(spot.get("mode", "")).upper()
     band = str(spot.get("band", "")).upper()
 
-    callsign_ok = not watch_callsigns or activator in watch_callsigns
-    park_ok = not watch_parks or park in watch_parks
     mode_ok = not watch_modes or mode in watch_modes
     band_ok = not watch_bands or band in watch_bands
 
-    # Match if the activator OR park matches, then apply optional mode/band filters.
-    target_ok = (watch_callsigns and activator in watch_callsigns) or (watch_parks and park in watch_parks)
+    target_ok = (
+        (watch_callsigns and activator in watch_callsigns)
+        or (watch_parks and park in watch_parks)
+    )
+
     if not watch_callsigns and not watch_parks:
         target_ok = True
 
-    return target_ok and mode_ok and band_ok and callsign_ok if watch_callsigns and not watch_parks else target_ok and mode_ok and band_ok
+    return target_ok and mode_ok and band_ok
 
 
 def make_unique_id(spot: Dict[str, Any]) -> str:
@@ -90,8 +89,18 @@ def make_unique_id(spot: Dict[str, Any]) -> str:
     return "|".join(str(p) for p in pieces)
 
 
+def format_frequency(freq: str) -> str:
+    try:
+        value = float(freq)
+        if value > 1000:
+            return f"{value / 1000:.3f} MHz"
+        return f"{value:.3f} MHz"
+    except Exception:
+        return str(freq)
+
+
 def build_embed_payload(spot: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
-    activator = str(spot.get("activator", "Unknown"))
+    activator = str(spot.get("activator", "Unknown")).upper()
     park = str(spot.get("reference", "Unknown"))
     freq = str(spot.get("frequency", "Unknown"))
     mode = str(spot.get("mode", "Unknown"))
@@ -99,21 +108,39 @@ def build_embed_payload(spot: Dict[str, Any], config: Dict[str, Any]) -> Dict[st
     spotter = str(spot.get("spotter", "Unknown"))
     comments = str(spot.get("comments", "") or "No comments")[:900]
 
+    pota_url = f"https://pota.app/#/activator/{activator}"
+    qrz_url = f"https://www.qrz.com/db/{activator}"
+
     fields = [
         {"name": "Park", "value": park, "inline": True},
-        {"name": "Frequency", "value": freq, "inline": True},
-        {"name": "Mode", "value": mode, "inline": True},
+        {"name": "Frequency", "value": format_frequency(freq), "inline": True},
+        {"name": "Mode", "value": mode or "Unknown", "inline": True},
         {"name": "Band", "value": band or "Unknown", "inline": True},
         {"name": "Spotted By", "value": spotter, "inline": True},
+        {"name": "QRZ Lookup", "value": f"[Open QRZ for {activator}]({qrz_url})", "inline": True},
         {"name": "Comments", "value": comments, "inline": False},
     ]
 
+    content = ""
+    allowed_mentions: Dict[str, Any] = {"parse": []}
+
+    role_id = str(config.get("role_id", "")).strip()
+
+    if config.get("ping_here", False):
+        content = "@here"
+        allowed_mentions = {"parse": ["everyone"]}
+
+    if config.get("ping_role", False) and role_id:
+        content = f"<@&{role_id}>"
+        allowed_mentions = {"roles": [role_id], "parse": []}
+
     payload: Dict[str, Any] = {
         "username": "POTA Spot Alerts",
+        "content": content,
         "embeds": [
             {
                 "title": f"🚨 POTA Spot: {activator}",
-                "url": f"https://pota.app/#/activator/{activator}",
+                "url": pota_url,
                 "description": f"**{activator}** was just spotted for **{park}**.",
                 "color": 3066993,
                 "fields": fields,
@@ -121,13 +148,8 @@ def build_embed_payload(spot: Dict[str, Any], config: Dict[str, Any]) -> Dict[st
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         ],
-        "allowed_mentions": {"parse": []},
+        "allowed_mentions": allowed_mentions,
     }
-
-    role_id = str(config.get("role_id", "")).strip()
-    if config.get("ping_role") and role_id:
-        payload["content"] = f"<@&{role_id}>"
-        payload["allowed_mentions"] = {"roles": [role_id], "parse": []}
 
     return payload
 
@@ -155,6 +177,7 @@ def main() -> int:
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=cutoff_minutes)
 
     sent_count = 0
+
     for spot in spots:
         if not isinstance(spot, dict):
             continue
@@ -172,6 +195,7 @@ def main() -> int:
 
         payload = build_embed_payload(spot, config)
         send_to_discord(webhook_url, payload)
+
         seen.add(unique_id)
         sent_count += 1
 
