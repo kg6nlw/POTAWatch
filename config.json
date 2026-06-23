@@ -1,0 +1,13 @@
+{
+  "watch_callsigns": [
+    "KG6NLW", "K6ARK", "AA0Z", "AI7LK", "K0WHW", "K1DDN", "K5QBF", "K5YVY", "K6DJV", "K6YYL", "K7SPR", "K8MRD", "K9OL", "KC5HWB", "KD7DTS", "KE8LQR", "KE8UTX", "KG5AHJ", "KH2SR", "KH6WI", "KI2D", "KI6NAZ", "KJ5LXP", "KK6USY", "KM9G", "KT0ADS", "NB6GC", "NW9F", "R1BIG", "VA3SDO", "VA7BIX", "VE6LK", "VE9CF", "VK7HH", "W1FYG", "W2HRC", "W6VVR", "W7DLZ", "WB6NOA", "WE4DX", "WT1W", "WX6SWW"
+  ],
+  "watch_parks": [
+    "US-0001"
+  ],
+  "watch_modes": [],
+  "watch_bands": [],
+  "role_id": "",
+  "ping_role": false,
+  "only_newer_than_minutes": 20
+}
