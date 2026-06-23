@@ -7,8 +7,8 @@
   ],
   "watch_modes": [],
   "watch_bands": [],
-"ping_here": true,
-"ping_role": false,
-"role_id": ""
+  "ping_here": true,
+  "ping_role": false,
+  "role_id": "",
   "only_newer_than_minutes": 15
 }
