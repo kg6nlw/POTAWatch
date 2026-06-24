@@ -1,9 +1,10 @@
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Set, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import requests
 
@@ -121,6 +122,12 @@ def write_latest_spot_file(spot: Dict[str, Any]) -> None:
         f.write(text[:450])
 
 
+def push_latest_spot_to_github() -> None:
+    subprocess.run(["git", "add", "latest_pota_spot.txt"], check=False)
+    subprocess.run(["git", "commit", "-m", "Update latest POTA spot"], check=False)
+    subprocess.run(["git", "push"], check=False)
+
+
 def build_embed_payload(spot: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
     activator = str(spot.get("activator", "Unknown")).upper()
     park = str(spot.get("reference", "Unknown"))
@@ -145,7 +152,6 @@ def build_embed_payload(spot: Dict[str, Any], config: Dict[str, Any]) -> Dict[st
 
     content = ""
     allowed_mentions: Dict[str, Any] = {"parse": []}
-
     role_id = str(config.get("role_id", "")).strip()
 
     if config.get("ping_here", False):
@@ -216,6 +222,7 @@ def main() -> int:
         payload = build_embed_payload(spot, config)
         send_to_discord(webhook_url, payload)
         write_latest_spot_file(spot)
+        push_latest_spot_to_github()
 
         seen.add(unique_id)
         sent_count += 1
