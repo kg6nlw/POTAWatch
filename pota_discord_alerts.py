@@ -3,13 +3,14 @@ import os
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Optional
 
 import requests
 
 POTA_SPOTS_URL = "https://api.pota.app/spot/activator"
 STATE_FILE = Path("seen_spots.json")
 CONFIG_FILE = Path("config.json")
+LATEST_SPOT_FILE = Path("latest_pota_spot.txt")
 
 
 def load_config() -> Dict[str, Any]:
@@ -39,7 +40,7 @@ def normalize_list(values: List[str]) -> Set[str]:
     return {str(v).strip().upper() for v in values if str(v).strip()}
 
 
-def parse_spot_time(spot: Dict[str, Any]) -> datetime | None:
+def parse_spot_time(spot: Dict[str, Any]) -> Optional[datetime]:
     for key in ("spotTime", "time", "date", "created", "createdAt"):
         value = spot.get(key)
         if not value:
@@ -99,6 +100,27 @@ def format_frequency(freq: str) -> str:
         return str(freq)
 
 
+def write_latest_spot_file(spot: Dict[str, Any]) -> None:
+    activator = str(spot.get("activator", "Unknown")).upper()
+    park = str(spot.get("reference", "Unknown"))
+    freq = format_frequency(str(spot.get("frequency", "Unknown")))
+    mode = str(spot.get("mode", "Unknown"))
+    band = str(spot.get("band", ""))
+    spotter = str(spot.get("spotter", "Unknown"))
+    qrz_url = f"https://www.qrz.com/db/{activator}"
+    pota_url = f"https://pota.app/#/activator/{activator}"
+
+    text = f"🚨 POTA: {activator} spotted at {park} on {freq} {mode}"
+
+    if band:
+        text += f" ({band})"
+
+    text += f" | Spotted by {spotter} | QRZ: {qrz_url} | POTA: {pota_url}"
+
+    with LATEST_SPOT_FILE.open("w", encoding="utf-8") as f:
+        f.write(text[:450])
+
+
 def build_embed_payload(spot: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
     activator = str(spot.get("activator", "Unknown")).upper()
     park = str(spot.get("reference", "Unknown"))
@@ -134,7 +156,7 @@ def build_embed_payload(spot: Dict[str, Any], config: Dict[str, Any]) -> Dict[st
         content = f"<@&{role_id}>"
         allowed_mentions = {"roles": [role_id], "parse": []}
 
-    payload: Dict[str, Any] = {
+    return {
         "username": "POTA Spot Alerts",
         "content": content,
         "embeds": [
@@ -150,8 +172,6 @@ def build_embed_payload(spot: Dict[str, Any], config: Dict[str, Any]) -> Dict[st
         ],
         "allowed_mentions": allowed_mentions,
     }
-
-    return payload
 
 
 def send_to_discord(webhook_url: str, payload: Dict[str, Any]) -> None:
@@ -195,6 +215,7 @@ def main() -> int:
 
         payload = build_embed_payload(spot, config)
         send_to_discord(webhook_url, payload)
+        write_latest_spot_file(spot)
 
         seen.add(unique_id)
         sent_count += 1
