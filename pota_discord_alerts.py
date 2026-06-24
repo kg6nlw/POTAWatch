@@ -54,6 +54,15 @@ def parse_spot_time(spot: Dict[str, Any]) -> Optional[datetime]:
     return None
 
 
+def format_spot_time_for_chat(spot: Dict[str, Any]) -> str:
+    spot_time = parse_spot_time(spot)
+    if spot_time:
+        local_time = spot_time.astimezone()
+    else:
+        local_time = datetime.now().astimezone()
+    return local_time.strftime("%b %d %Y %I:%M %p")
+
+
 def spot_matches(spot: Dict[str, Any], config: Dict[str, Any]) -> bool:
     watch_callsigns = normalize_list(config.get("watch_callsigns", []))
     watch_parks = normalize_list(config.get("watch_parks", []))
@@ -108,14 +117,14 @@ def write_latest_spot_file(spot: Dict[str, Any]) -> None:
     mode = str(spot.get("mode", "Unknown"))
     band = str(spot.get("band", ""))
     spotter = str(spot.get("spotter", "Unknown"))
+    time_text = format_spot_time_for_chat(spot)
     qrz_url = f"https://www.qrz.com/db/{activator}"
     pota_url = f"https://pota.app/#/activator/{activator}"
 
     text = f"🚨 POTA: {activator} spotted at {park} on {freq} {mode}"
-
     if band:
         text += f" ({band})"
-
+    text += f" at {time_text}"
     text += f" | Spotted by {spotter} | QRZ: {qrz_url} | POTA: {pota_url}"
 
     with LATEST_SPOT_FILE.open("w", encoding="utf-8") as f:
